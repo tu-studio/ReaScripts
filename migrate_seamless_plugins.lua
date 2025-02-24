@@ -25,7 +25,7 @@ if rotate then
 
   param_idx_new[1] = y_new_idx
   param_idx_new[2] = x_new_idx
-
+end
 
 for i = start_track,end_track do
   track = reaper.GetTrack(0, i)
