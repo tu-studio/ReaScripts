@@ -31,7 +31,7 @@ for i = start_track,end_track do
   track = reaper.GetTrack(0, i)
   
   _, track_name = reaper.GetTrackName(track)
-  print("track: "..track_name)
+  reaper.ShowConsoleMsg("\ntrack: "..track_name.."\n")
   
   -- add new seamless plugin if not already present
   new_plugin_idx = reaper.TrackFX_AddByName(track, new_plugin_name, false, 1)
@@ -45,6 +45,9 @@ for i = start_track,end_track do
 
     new_i = param_idx_new[i+1]
     new_env = reaper.GetFXEnvelope(track, new_plugin_idx,new_i , true)
+    
+    _, param_name_new = reaper.GetEnvelopeName(new_env)
+    
     if old_env ~= nil then 
       
     
@@ -56,15 +59,24 @@ for i = start_track,end_track do
       for point_idx = 0, n_env_points_old - 1 do
         -- get old envelope point
         retval, time, value, shape, tension, selected = reaper.GetEnvelopePointEx(old_env,-1, point_idx)
-        -- scale coordinate
+        
+        -- transform coordinate
         if i <= 2 then
+          -- scale (0,1) normalized value to (-10,10)
+          value = (value * 20) - 10
+
+          
           value = value / scaling_factor
+          -- flip y coordinate if rotating
+          if rotate and i == 1 then
+            value = value * -1
+          end
+          -- scale back from (-1,1) to (0,1)
+          value = (value + 1)/2
+
         end
 
-        -- flip y coordinate if rotating
-        if rotate and i == 1 then
-          value = value * -1
-        end
+        
 
         -- write point to new envelope
         reaper.InsertEnvelopePointEx(new_env, -1, time, value, shape, tension, true, true)
@@ -75,10 +87,10 @@ for i = start_track,end_track do
 
       -- did it work? lets find out
       n_env_points_new = reaper.CountEnvelopePoints(new_env)
-      print("  " .. param_name_old .. " n_items:"..n_env_points_old.."\n")
-      print("  " .. param_name_new .. " n_items:"..n_env_points_new.."\n")    
+      reaper.ShowConsoleMsg("  " .. param_name_old .. " n_items:"..n_env_points_old.."\n")
+      reaper.ShowConsoleMsg("  " .. param_name_new .. " n_items:"..n_env_points_new.."\n")    
     else
-      print("skipped something")
+      reaper.ShowConsoleMsg("skipped envelope for ".. param_name_new .. " with index " .. i .."\n")
     end
   end
   
