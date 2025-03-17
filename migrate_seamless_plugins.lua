@@ -18,7 +18,8 @@ scaling_factor = 12.108
 -- if rotate x_rot=-y_old, y_rot=x_old
 rotate = true
 
--- swap x and y target idx if rotate == true
+-- swap x and y target idx if rotate == true, actual rotation happens later
+-- rotation is done by first swapping the indices and later inverting the x-axis
 if rotate then
   x_new_idx = param_idx_new[1]
   y_new_idx = param_idx_new[2]
@@ -27,6 +28,7 @@ if rotate then
   param_idx_new[2] = x_new_idx
 end
 
+-- iterate over all relevant track indices
 for i = start_track,end_track do
   track = reaper.GetTrack(0, i)
   
