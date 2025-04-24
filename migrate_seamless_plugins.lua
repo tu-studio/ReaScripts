@@ -28,69 +28,102 @@ if rotate then
   param_idx_new[2] = x_new_idx
 end
 
+function FlattenAutomationItems(env)
+  -- handle automation items (by removing them)
+  local n_automation_items = reaper.CountAutomationItems(env)
+  if n_automation_items > 0 then
+    local delete_automation_item_command_id = 42088
+
+    -- make envelope visible, otherwise calling the deletion command does not work
+    local r, s = reaper.GetSetEnvelopeInfo_String(env, "VISIBLE", "1", true)
+    
+    for autoitem_index = 0, n_automation_items - 1 do
+      reaper.GetSetAutomationItemInfo(env, autoitem_index, "D_UISEL", 1, true)
+    end
+    reaper.Main_OnCommand(delete_automation_item_command_id, 0)
+    reaper.UpdateTimeline()
+
+    n_automation_items = reaper.CountAutomationItems(env)
+    if n_automation_items > 0 then
+      reaper.ShowConsoleMsg("ERROR: could not remove automation items for track "..reaper.GetEnvelopeName(env)..  ": "..n_automation_items.." Items remaining\n")
+    end
+  end
+end
+
+-- track_idx is the index of the envelope of the plugin
+function CopyAndTransformEnvelope(src_env, target_env, track_idx)
+  local n_env_points_old = reaper.CountEnvelopePointsEx(src_env, -1)
+
+  for point_idx = 0, n_env_points_old - 1 do
+    -- get old envelope point
+    local _, time, value, shape, tension, _ = reaper.GetEnvelopePointEx(src_env,-1, point_idx)
+    
+    -- transform coordinate
+    if track_idx <= 2 then
+      -- scale (0,1) normalized value to (-10,10)
+      value = (value * 20) - 10
+
+      
+      value = value / scaling_factor
+      -- flip y coordinate if rotating
+      if rotate and track_idx == 1 then
+        value = value * -1
+      end
+      -- scale back from (-1,1) to (0,1)
+      value = (value + 1)/2
+
+    end
+
+    -- write point to new envelope
+    reaper.InsertEnvelopePointEx(target_env, -1, time, value, shape, tension, true, true)
+  end
+
+  -- sort points for some reason
+  reaper.Envelope_SortPointsEx(target_env, -1)
+
+
+  -- did it work? lets find out
+  local n_env_points_new = reaper.CountEnvelopePoints(target_env)
+  if n_env_points_new ~= n_env_points_old then
+    reaper.ShowConsoleMsg("ERROR:  " .. reaper.GetEnvelopeName(src_env) .. " n_items_old:"..n_env_points_old.. " n_items_new:"..n_env_points_new.. "\n")
+  end
+end
+
+
+
+-- get project length (in s)
+current_project, _ = reaper.EnumProjects(-1)
+project_length = reaper.GetProjectLength(current_project)
+
 -- iterate over all relevant track indices
-for i = start_track,end_track do
-  track = reaper.GetTrack(0, i)
+for track_idx = start_track,end_track do
+  local track = reaper.GetTrack(0, track_idx)
   
-  _, track_name = reaper.GetTrackName(track)
+  local _, track_name = reaper.GetTrackName(track)
   reaper.ShowConsoleMsg("\ntrack: "..track_name.."\n")
   
   -- add new seamless plugin if not already present
-  new_plugin_idx = reaper.TrackFX_AddByName(track, new_plugin_name, false, 1)
-  old_plugin_idx = reaper.TrackFX_AddByName(track, old_plugin_name, false, 0)
-  count = 0
+  local new_plugin_idx = reaper.TrackFX_AddByName(track, new_plugin_name, false, 1)
+  local old_plugin_idx = reaper.TrackFX_AddByName(track, old_plugin_name, false, 0)
 
   -- migrate gain parameters
   for i = 0, 5 do
-    old_env = reaper.GetFXEnvelope(track, old_plugin_idx, i, false)
+    local old_env = reaper.GetFXEnvelope(track, old_plugin_idx, i, false)
 
 
-    new_i = param_idx_new[i+1]
-    new_env = reaper.GetFXEnvelope(track, new_plugin_idx,new_i , true)
+    local new_i = param_idx_new[i+1]
+    local new_env = reaper.GetFXEnvelope(track, new_plugin_idx,new_i , true)
+    -- clear envelope points on the new envelope
+    reaper.DeleteEnvelopePointRange(new_env, 0, project_length)
+
+
+    local _, param_name_new = reaper.GetEnvelopeName(new_env)
     
-    _, param_name_new = reaper.GetEnvelopeName(new_env)
-    
-    if old_env ~= nil then 
+    if old_env ~= nil then      
+      -- this is where most of the magic happens
+      FlattenAutomationItems(old_env)
+      CopyAndTransformEnvelope(old_env, new_env, i)
       
-    
-      _, param_name_old = reaper.GetEnvelopeName(old_env)
-      _, param_name_new = reaper.GetEnvelopeName(new_env)
-      n_env_points_old = reaper.CountEnvelopePointsEx(old_env, -1)
-      n_env_points_new = reaper.CountEnvelopePointsEx(new_env, -1)
-      
-      for point_idx = 0, n_env_points_old - 1 do
-        -- get old envelope point
-        retval, time, value, shape, tension, selected = reaper.GetEnvelopePointEx(old_env,-1, point_idx)
-        
-        -- transform coordinate
-        if i <= 2 then
-          -- scale (0,1) normalized value to (-10,10)
-          value = (value * 20) - 10
-
-          
-          value = value / scaling_factor
-          -- flip y coordinate if rotating
-          if rotate and i == 1 then
-            value = value * -1
-          end
-          -- scale back from (-1,1) to (0,1)
-          value = (value + 1)/2
-
-        end
-
-        
-
-        -- write point to new envelope
-        reaper.InsertEnvelopePointEx(new_env, -1, time, value, shape, tension, true, true)
-      end
-
-      -- sort points for some reason
-      reaper.Envelope_SortPointsEx(new_env, -1)
-
-      -- did it work? lets find out
-      n_env_points_new = reaper.CountEnvelopePoints(new_env)
-      reaper.ShowConsoleMsg("  " .. param_name_old .. " n_items:"..n_env_points_old.."\n")
-      reaper.ShowConsoleMsg("  " .. param_name_new .. " n_items:"..n_env_points_new.."\n")    
     else
       reaper.ShowConsoleMsg("skipped envelope for ".. param_name_new .. " with index " .. i .."\n")
     end
