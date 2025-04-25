@@ -45,7 +45,8 @@ function FlattenAutomationItems(env)
 
     n_automation_items = reaper.CountAutomationItems(env)
     if n_automation_items > 0 then
-      reaper.ShowConsoleMsg("ERROR: could not remove automation items for track "..reaper.GetEnvelopeName(env)..  ": "..n_automation_items.." Items remaining\n")
+      local _, env_name = reaper.GetEnvelopeName(env)
+      reaper.ShowConsoleMsg("ERROR: could not remove automation items for track "..env_name..  ": "..n_automation_items.." Items remaining\n")
     end
   end
 end
@@ -85,7 +86,8 @@ function CopyAndTransformEnvelope(src_env, target_env, track_idx)
   -- did it work? lets find out
   local n_env_points_new = reaper.CountEnvelopePoints(target_env)
   if n_env_points_new ~= n_env_points_old then
-    reaper.ShowConsoleMsg("ERROR:  " .. reaper.GetEnvelopeName(src_env) .. " n_items_old:"..n_env_points_old.. " n_items_new:"..n_env_points_new.. "\n")
+    local _, env_name  = reaper.GetEnvelopeName(src_env)
+    reaper.ShowConsoleMsg("ERROR:  " .. env_name .. " n_items_old:"..n_env_points_old.. " n_items_new:"..n_env_points_new.. "\n")
   end
 end
 
